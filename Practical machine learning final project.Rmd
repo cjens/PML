@@ -1,0 +1,120 @@
+---
+title: "Practical Machine Learning - Final Project"
+author: "Camilla Jensen"
+date: "1/4/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+```
+
+## Introduction
+
+Using a large dataset from the quantified self movement research community we must in this project build a prediction model towards revealing whether a person performed barbell lifts correctly or incorrectly based on observed movement patterns using smartband type of devices (e.g. Jarbone Up, Nike FuelBand, Fitbit etc.).
+
+The data used in the project is described and referenced on the followsing website: http://groupware.les.inf.puc-rio.br. See also Velloso, Bulling, Gellerson, Ugulino and Fuks (2013).
+
+The problem set given to us has in this report been broken down into the following tasks:
+1. Preparing and preprocessing the data and setting aside a portion of the training data for cross validation;
+2. Applying one or several prediction models to the data;
+3. Predicting 'classe' for the 20 test cases;
+4. Discussion of validity.
+
+
+Each task is done section by section below.
+
+## Preparing and preprocessing the data
+
+The testing dataset on this assignment is somewhat different from what we have seen on the course assignments and here consists only of 20 observations. The task is therefore to use a very large dataset of 19,622 observations (namely the training data) to reveal task performance in the small testing dataset. 
+
+Initial screening of the testing dataset shows that only 60 variables are complete without any NA's. This must be important for model performance. Selection of predictors must therefore take outset in what is available in the testing dataset. Also variables that are unrelated with task performance (e.g. the descriptors in the first 7 columns of the dataset) are excluded from the final testing and training datasets as well. 
+
+The remaining 52 predictor variables are then passed on to the next task which is preprocessing.'Classe' is added as an empty column in the testing dataset for sake of easy coding so we can match the predictors more easily under this task in the two datasets. It is exactly this column that we need to predict with the exercise.
+
+(Testing has 54 variables because there is one column named 'problemid' that we keep in case we will need it later which is not in the training dataset.)
+
+```{r, message=FALSE, warning=FALSE}
+train_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+test_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+download.file(url=train_url, destfile="train.csv")
+download.file(url=test_url, destfile="test.csv")
+
+test <- read.csv("~/Desktop/test.csv", na.strings = c("NA", ""))
+train <- read.csv("~/Desktop/train.csv", na.strings = c("NA", ""))
+
+test <- test[ , ! apply( test , 2 , function(x) all(is.na(x)) ) ]
+
+remove_vars <- c('X', 'user_name','raw_timestamp_part_1', 'raw_timestamp_part_2', 'cvtd_timestamp', 'new_window', 'num_window')
+
+test["classe"] <- NA
+
+testing <- test[,!(names(test) %in% remove_vars)]
+
+train <- train[,(names(train) %in% names(testing))]
+
+library(caret)
+
+inTrain <-  createDataPartition(y=train$classe, p=0.90, list=FALSE)
+training <- train[inTrain,]
+validating <- train[-inTrain,]
+
+dim(testing)
+dim(training)
+dim(validating)
+```
+The training dataset uses 90% of the original training dataset, whereas 10% is set aside for cross validations. This is possible and desirable owing to the large sample size of the trainig dataset and the fact that the prediction model's accuracy is greater for data splitting the larger is the training dataset as long as the validating dataset does not become very small. We need a very accurate model to ensure that we make 100% correct projections for the 20 test cases in the testing dataset.
+
+## Building prediction models
+
+Here we build and compare the performance of 3 different prediction models: random forest (rf), linear discriminant analysis (lda) and generalised boosted regression models (gbm). Comparing the accuracy (where the out of sample error is 1-accuracy) we see that the rf method performs best, followed by lda and with poorest performance for gbm.
+
+
+```{r, message=FALSE, warning=FALSE}
+library(caret)
+Fit1 <- train(classe~., method="rf", preProcess="pca", data=training)
+Fit2 <- train(classe~., method="lda", preProcess="pca",  data=training)
+Fit3 <- train(classe~., method="rpart", preProcess="pca", data=training)
+
+confusionMatrix(validating$classe, predict(Fit1, validating))
+confusionMatrix(validating$classe, predict(Fit2, validating))
+confusionMatrix(validating$classe, predict(Fit3, validating))
+```
+
+The results from the different methods are resampled and plotted for easier comparison. Linear methods strongly underperform the non-linear random forest method in this prediction model. This is perhaps not surprising as the dependent variable (or the variable we want to predict) has five levels and those levels cannot be easily translated to a cardinal or even ordinal scale.
+
+```{r}
+results <- resamples(list(RF=Fit1, LDA=Fit2, GBM=Fit3))
+scales <- list(x=list(relation="free"), y=list(relation="free"))
+dotplot(results, scales=scales)
+
+```
+
+## Prediction results 
+
+We now use the results from the rf prediction model (Fit1) to make prediction for the 20 test cases in the testing dataset. The results are shown below.
+```{r}
+
+pred1 <- predict(Fit1, testing)
+print(pred1)
+
+```
+
+
+## Validity
+
+Model accuracy was alone estimated using data splitting. This  is deemed sufficient in view to the large sample size. Better results could be obtained by using more refined methods towards optimising model accuracy such as k-fold.
+
+Different methods were applied to the training and validating parts of the split dataset. Those methods were linear as well as non-linear including random forest (rf), linear discriminant analysis (lda) and generalised boosted regression model (gbm). 
+
+Since there is little theory available to support model building and also expectations towards predictions it is hard to know beforehand what the optimal method would be. Here was used a reasonable range of different methods.
+
+Overall the results are therefore held to be valid in predicting the behaviour for the test cases.
+
+## References
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
